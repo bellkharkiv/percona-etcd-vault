@@ -1,11 +1,8 @@
 # percona-etcd-vault
-
  Open Issues
 Vault url is http and not https
 Monitoring with Prometheus 
 Add node selector for each infra ETCD, Vault and Percona
-
-
 
 Comments
 Before installing the infrastructure, please, study attentively the attached files with the examples how we did settings for our infrastructure. It gives you a general vision of how it should be done on your side. Please don't hesitate to contact us if you have any questions.
@@ -16,10 +13,24 @@ Install & setup ETCD and Vault
     $ kubectl create ns etcd
     $ helm repo add bitnami https://charts.bitnami.com/bitnami  
     $ helm install etcd bitnami/etcd -n etcd --debug \
-  --set replicaCount=3 \
+  --set replicaCount=2 \
   --set persistence.enabled=true \
   --set persistence.size=2Gi \
-  --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD
+  --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
+  --set nodeSelector=<Node labels for pod assignment> \
+  --set metrics.enabled=true 
+
+
+Metrics parameters https://github.com/bitnami/charts/tree/master/bitnami/etcd#metrics-parameters
+
+
+ helm install etcd bitnami/etcd -n etcd --debug  --set replicaCount=3 --set persistence.enabled=true --set persistence.size=2Gi --set auth.rbac.rootPassword=Test1!
+
+
+Assign Pods to Nodes using Node Affinity
+$ kubectl label nodes <your-node-name> label=<your-label>
+$ kubectl get nodes --show-labels
+ 
 
 2. Add user and KMS key to AWS
 2.1 Create new user in AWS account (vault),  Access type => Programmatic access, copy Access key ID (<VAULT_USER_ACCESS_KEY>), Secret access key (<VAULT_USER_SECRET_KEY>)
@@ -32,7 +43,9 @@ Install & setup ETCD and Vault
     $ git clone https://github.com/hashicorp/vault-helm.git (Need to download new code from GitHub)
     $ cd vault-helm
 3.1 You need to edit the values.yaml file adding parameters
-Standalone Server with TLS (https://www.vaultproject.io/docs/platform/k8s/helm/examples/standalone-tls)
+NodeSelector for Vault https://learn.hashicorp.com/tutorials/vault/kubernetes-reference-architecture?in=vault/kubernetes
+
+HA with TLS (https://www.vaultproject.io/docs/platform/k8s/helm/examples/standalone-tls)
 global:
 
   tlsDisable: false
@@ -47,7 +60,13 @@ server:
 
 
   standalone:
+    enabled: false
+	…
+
+  ha:
     enabled: true
+    replicas: 2
+
     config: |
       listener "tcp" {
         address = "[::]:8200"
@@ -57,6 +76,10 @@ server:
         tls_client_ca_file = "/vault/userconfig/vault-server-tls/vault.ca"
       }
 
+     telemetry {
+       prometheus_retention_time = "30s"
+       disable_hostname = true
+     }
   
       storage "etcd" {
         address  = "http://etcd.etcd.svc:2379"
@@ -71,7 +94,78 @@ server:
         secret_key = "<VAULT_USER_SECRET_KEY>"
         kms_key_id = "<AWS_KMS_KEY_ID>"
       }
-   
+ 
+
+commands to generate SSL certificate and private key
+$  SERVICE=vault
+$  NAMESPACE=vault
+$  SECRET_NAME=vault-server-tls
+$  TMPDIR=/root/ssl/
+$  openssl genrsa -out ${TMPDIR}/vault.key 2048
+$  cd /root/ssl
+$  cat <<EOF >${TMPDIR}/csr.conf
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+[req_distinguished_name]
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = ${SERVICE}
+DNS.2 = ${SERVICE}.${NAMESPACE}
+DNS.3 = ${SERVICE}.${NAMESPACE}.svc
+DNS.4 = ${SERVICE}.${NAMESPACE}.svc.cluster.local
+IP.1 = 127.0.0.1
+EOF
+$  openssl req -new -key ${TMPDIR}/vault.key -subj "/CN=${SERVICE}.${NAMESPACE}.svc" -out ${TMPDIR}/server.csr -config {TMPDIR}/csr.conf
+$  export CSR_NAME=vault-csr
+$  cat <<EOF >${TMPDIR}/csr.yaml
+apiVersion: certificates.k8s.io/v1beta1
+kind: CertificateSigningRequest
+metadata:
+  name: ${CSR_NAME}
+spec:
+  groups:
+  - system:authenticated
+  request: $(cat ${TMPDIR}/server.csr | base64 | tr -d '\n')
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+EOF
+
+$  kubectl create -f ${TMPDIR}/csr.yaml
+$  kubectl certificate approve ${CSR_NAME}
+$  serverCert=$(kubectl get csr ${CSR_NAME} -o jsonpath='{.status.certificate}')
+$  echo "${serverCert}" | openssl base64 -d -A -out ${TMPDIR}/vault.crt
+$  kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[].cluster.certificate-authority-data}' | base64 -d > ${TMPDIR}/vault.ca
+$  kubectl create secret generic ${SECRET_NAME} \
+         --namespace ${NAMESPACE} \
+         --from-file=vault.key=${TMPDIR}/vault.key \
+         --from-file=vault.crt=${TMPDIR}/vault.crt \
+         --from-file=vault.ca=${TMPDIR}/vault.ca
+
+
+
+Prometheus monitoring vault
+In the prometheus config you need to add
+# prometheus.yml
+scrape_configs:
+  - job_name: 'vault'
+    metrics_path: "/v1/sys/metrics"
+    params:
+      format: ['prometheus']
+    scheme: https
+    tls_config:
+      ca_file: your_ca_here.pem
+    bearer_token: "your_vault_token_here"
+    static_configs:
+    - targets: ['your_vault_server_here:8200']
+https://www.vaultproject.io/docs/configuration/telemetry#prometheus
+
 3.2 install Vault
     $ helm install -n vault vault ./ 
 3.3 You need to initialize the Vault.
@@ -101,7 +195,21 @@ $ apt install etcd-client
 $ kubectl port-forward --address localhost pod/etcd-0 32379:2379 
 $ etcdctl --debug --endpoints=http://127.0.0.1:32379 --user=root:YOUR_PASSWORD_FOR_ETCD snapshot save /tmp/snapshot-$(date +%Y%m%d).db
 
+
+
+
 Install & setup Install Percona XtraDB Cluster
+Installing the PMM Server (monitoring) https://www.percona.com/blog/2020/07/23/using-percona-kubernetes-operators-with-percona-monitoring-and-management/
+
+Edit cr.yaml
+...
+pmm:
+       enabled: true
+...
+$ helm repo add percona https://percona-charts.storage.googleapis.com
+$ helm repo update
+$ helm install monitoring percona/pmm-server --set platform=kubernetes --version 2.7.0 --set "credentials.password=<YOUR_PASSWORD>"
+
 
 1. Create a namespace pxc
 $ kubectl create namespace pxc
@@ -147,6 +255,11 @@ Here the actual password is base64-encoded, and echo 'cm9vdF9wYXNzd29yZA==' | ba
 $ kubectl port-forward svc/example-proxysql 3306:3306
 $ mysql -h 127.0.0.1 -P 3306 -uroot -proot_password
 
+Run this on first setup
+SET GLOBAL pxc_strict_mode=PERMISSIVE;
+
+
+
 Backups for MySQL
 Making on-demand backup: 
 $ kubectl apply -f deploy/backup-s3.yaml -n pxc (credential aws)
@@ -155,12 +268,10 @@ https://github.com/percona/percona-xtradb-cluster-operator/blob/main/deploy/back
 
 
 
+
 Setup for microk8s
 sudo microk8s.enable dns rbac storage helm3 dns
-Create storage class https://igy.cx/posts/setup-microk8s-rbac-storage/#create-a--storageclass 
-Name the storage class default
- kubectl patch storageclass microk8s-hostpath -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
-kubectl patch storageclass default -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+
 
 Useful links
 TLS for Vault
