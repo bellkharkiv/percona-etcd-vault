@@ -198,7 +198,7 @@ $ etcdctl --debug --endpoints=http://127.0.0.1:32379 --user=root:YOUR_PASSWORD_F
 
 
 
-Install & setup Install Percona XtraDB Cluster
+0.Install & setup Install Percona XtraDB Cluster
 Installing the PMM Server (monitoring) https://www.percona.com/blog/2020/07/23/using-percona-kubernetes-operators-with-percona-monitoring-and-management/
 
 Edit cr.yaml
