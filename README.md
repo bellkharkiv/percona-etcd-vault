@@ -17,12 +17,12 @@ Install & setup ETCD and Vault
 $ kubectl create ns etcd
 $ helm repo add bitnami https://charts.bitnami.com/bitnami  
 $ helm install etcd bitnami/etcd -n etcd --debug \
-  --set replicaCount=2 \
-  --set persistence.enabled=true \
-  --set persistence.size=2Gi \
-  --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
-  --set nodeSelector=<Node labels for pod assignment> \
-  --set metrics.enabled=true 
+    --set replicaCount=2 \
+    --set persistence.enabled=true \
+    --set persistence.size=2Gi \
+    --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
+    --set nodeSelector=<Node labels for pod assignment> \
+    --set metrics.enabled=true 
 
 
 FYI: Metrics parameters for etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd#metrics-parameters)
