@@ -1,10 +1,10 @@
 Comments
 Before installing the infrastructure, please, study attentively the attached files with the examples how we did settings for our infrastructure. It gives you a general vision of how it should be done on your side. Please don't hesitate to contact us if you have any questions.
 Setup for microk8s
-# snap install --classic microk8s
-# microk8s.enable dns rbac storage helm3 dns
-# snap install helm --classic
-# snap alias microk8s.kubectl kubectl
+$ snap install --classic microk8s
+$ microk8s.enable dns rbac storage helm3 dns
+$ snap install helm --classic
+$ snap alias microk8s.kubectl kubectl
 # microk8s.kubectl config view --raw > $HOME/.kube/config
 # chmod 600 /root/.kube/config
 Assign Pods to Nodes using Node Affinity
@@ -16,13 +16,13 @@ Install & setup ETCD and Vault
 1. Install etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd)
 $ kubectl create ns etcd
 $ helm repo add bitnami https://charts.bitnami.com/bitnami  
-$ helm install etcd bitnami/etcd -n etcd --debug \
-    --set replicaCount=2 \
-    --set persistence.enabled=true \
-    --set persistence.size=2Gi \
-    --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
-    --set nodeSelector=<Node labels for pod assignment> \
-    --set metrics.enabled=true 
+$ helm install etcd bitnami/etcd -n etcd --debug \`
+  --set replicaCount=2 \
+  --set persistence.enabled=true \
+  --set persistence.size=2Gi \
+  --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
+  --set nodeSelector=<Node labels for pod assignment> \
+  --set metrics.enabled=true 
 
 
 FYI: Metrics parameters for etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd#metrics-parameters)
@@ -178,7 +178,6 @@ $ vault login s.EAwKiixSkB16CAxbYczc8bud
 $ vault secrets enable --version=1 -path=pxc-secret kv
 exit the container 
 $ exit
-
 Backups for Vault (optional)
 Install in local machine etcdcli v3. Ubuntu 18.04:
 $ apt install etcd-client
@@ -219,13 +218,15 @@ type: Opaque
 stringData:
   keyring_vault.conf: |-
     token = s.br9x2CLeW1X7Ne9EnFpYIti0
-    vault_url = http://vault.vault.svc:8200
+    vault_url = https://vault.vault.svc:8200
     secret_mount_point = pxc-secret
     vault_ca = /etc/mysql/vault-keyring-secret/ca.cert
   ca.cert: |-
     -----BEGIN CERTIFICATE-----
     <REPLACE_WITH_OWN_CA_CERT>
     -----END CERTIFICATE-----
+
+Check this yaml with this http://www.yamllint.com/
 
 Create secret keyring-secret-vault
 $ kubectl apply -f deploy/vault-secret.yaml -n pxc
@@ -243,8 +244,25 @@ rolebinding.rbac.authorization.k8s.io/service-account-percona-xtradb-cluster-ope
 deployment.apps/percona-xtradb-cluster-operator created
 
 4. The operator has been started, and you can create the Percona XtraDB cluster:
-$ kubectl apply -f deploy/cr.yaml -n pxc
 
+
+
+
+Install pmm server for percona
+FYI: Installing the PMM Server (https://www.percona.com/blog/2020/07/23/using-percona-kubernetes-operators-with-percona-monitoring-and-management/)
+
+$ helm repo add percona https://percona-charts.storage.googleapis.com
+$ helm repo update
+helm install monitoring percona/pmm-server -n pxc --set platform=kubernetes --version 2.7.0 --set "credentials.password=3kC3xRdk_1"
+
+
+
+edit file deploy/secrets.yaml need change password , enter the password that you specified during installation in the field 
+...
+monitor: 3kC3xRdk_1
+...
+
+$ kubectl apply -f deploy/cr.yaml -n pxc
 The process could take some time. The return statement confirms the creation:
 perconaxtradbcluster.pxc.percona.com/cluster1 created
 
@@ -289,12 +307,7 @@ scrape_configs:
     static_configs:
     - targets: ['your_vault_server_here:8200']
 https://www.vaultproject.io/docs/configuration/telemetry#prometheus
-Install pmm server for percona
-FYI: Installing the PMM Server (https://www.percona.com/blog/2020/07/23/using-percona-kubernetes-operators-with-percona-monitoring-and-management/)
 
-$ helm repo add percona https://percona-charts.storage.googleapis.com
-$ helm repo update
-$ helm install monitoring percona/pmm-server --set platform=kubernetes --version 2.7.0 --set "credentials.password=<YOUR_PASSWORD>"
 Useful links
 TLS for Vault
 https://www.vaultproject.io/docs/platform/k8s/helm/examples/standalone-tls
