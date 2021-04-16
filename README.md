@@ -165,14 +165,17 @@ $  kubectl create secret generic ${SECRET_NAME} \
          --from-file=vault.ca=${TMPDIR}/vault.ca
 ```
 3.2 install Vault
-    `$ helm install -n vault vault ./ ` 
+`$ helm install -n vault vault ./ ` 
 3.3 You need to initialize the Vault.
+
 ```
     $ kubectl get pods -n vault
     $ kubectl exec -it vault-0 -n vault -- sh
 ```
 For auto-unseal, to work, you need to make an init once with the following command
-   ` $ vault operator init` 
+` $ vault operator init` 
+
+```
 you will see something like this
 Recovery Key 1: q+jzuRuljKTKGRD139BeSc+q878Pc4uyDoXkL+1n5nA0
 Recovery Key 2: g3zyC7liaGi4ENnyWxtcGGO1QdsgIkDHQqr5XkJOLAW6
@@ -181,6 +184,7 @@ Recovery Key 4: rYjk9RbUiAG6nabXfX+Pbps+w2FqVh+ROLJudigOvwBO
 Recovery Key 5: lqhv7pJtIuZBzIke3ZStuajB6Bibs5Emx+AagGzq5Q1T
 
 Initial Root Token: s.EAwKiixSkB16CAxbYczc8bud
+```
 
 Save keys and token somewhere in file!!!
 
@@ -198,8 +202,7 @@ $ apt install etcd-client
 $ kubectl port-forward --address localhost pod/etcd-0 32379:2379 
 $ etcdctl --debug --endpoints=http://127.0.0.1:32379 --user=root:YOUR_PASSWORD_FOR_ETCD snapshot save /tmp/snapshot-$(date +%Y%m%d).db
 ```
-Install & setup Install Percona XtraDB Cluster
-
+###Install & setup Install Percona XtraDB Cluster
 
 
 1. Create a namespace pxc
@@ -285,13 +288,17 @@ edit file deploy/secrets.yaml need change password , enter the password that you
 monitor: 3kC3xRdk_1
 ...
 ```
+
 `$ kubectl apply -f deploy/cr.yaml -n pxc`
+
 The process could take some time. The return statement confirms the creation:
 perconaxtradbcluster.pxc.percona.com/cluster1 created
 
 5. During previous steps, the Operator has generated several secrets, including the password for the root user, which you will need to access the cluster.
-Use kubectl get secrets command to see the list of Secrets objects (by default Secrets object you are interested in has my-cluster-secrets name). Then 
+Use kubectl get secrets command to see the list of Secrets objects (by default Secrets object you are interested in has my-cluster-secrets name). Then
+
 `$ kubectl get secret my-cluster-secrets -o yaml`
+
 will return the YAML file with generated secrets, including the root password which should look as follows:
 ```
 ...
