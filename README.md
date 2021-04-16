@@ -1,12 +1,13 @@
 Comments
 Before installing the infrastructure, please, study attentively the attached files with the examples how we did settings for our infrastructure. It gives you a general vision of how it should be done on your side. Please don't hesitate to contact us if you have any questions.
 Setup for microk8s
+
 $ snap install --classic microk8s
 $ microk8s.enable dns rbac storage helm3 dns
 $ snap install helm --classic
 $ snap alias microk8s.kubectl kubectl
-# microk8s.kubectl config view --raw > $HOME/.kube/config
-# chmod 600 /root/.kube/config
+$ microk8s.kubectl config view --raw > $HOME/.kube/config
+$ chmod 600 /root/.kube/config
 Assign Pods to Nodes using Node Affinity
 (If you use more than one node for nodeselector you need)
 
@@ -14,6 +15,7 @@ $ kubectl label nodes <your-node-name> label=<your-label>
 $ kubectl get nodes --show-labels
 Install & setup ETCD and Vault
 1. Install etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd)
+
 $ kubectl create ns etcd
 $ helm repo add bitnami https://charts.bitnami.com/bitnami  
 $ helm install etcd bitnami/etcd -n etcd --debug \`
