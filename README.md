@@ -1,21 +1,23 @@
-Comments
+## Comments
 Before installing the infrastructure, please, study attentively the attached files with the examples how we did settings for our infrastructure. It gives you a general vision of how it should be done on your side. Please don't hesitate to contact us if you have any questions.
 Setup for microk8s
-
+```
 $ snap install --classic microk8s
 $ microk8s.enable dns rbac storage helm3 dns
 $ snap install helm --classic
 $ snap alias microk8s.kubectl kubectl
 $ microk8s.kubectl config view --raw > $HOME/.kube/config
 $ chmod 600 /root/.kube/config
+```
 Assign Pods to Nodes using Node Affinity
 (If you use more than one node for nodeselector you need)
-
+```
 $ kubectl label nodes <your-node-name> label=<your-label>
 $ kubectl get nodes --show-labels
-Install & setup ETCD and Vault
+```
+## Install & setup ETCD and Vault
 1. Install etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd)
-
+```
 $ kubectl create ns etcd
 $ helm repo add bitnami https://charts.bitnami.com/bitnami  
 $ helm install etcd bitnami/etcd -n etcd --debug \`
@@ -25,7 +27,7 @@ $ helm install etcd bitnami/etcd -n etcd --debug \`
   --set auth.rbac.rootPassword=YOUR_PASSWORD_FOR_ETCD \
   --set nodeSelector=<Node labels for pod assignment> \
   --set metrics.enabled=true 
-
+```
 
 FYI: Metrics parameters for etcd (https://github.com/bitnami/charts/tree/master/bitnami/etcd#metrics-parameters)
 
@@ -37,14 +39,17 @@ click next, enter Alias (name your key)
 click next, enter Key administrators (add user who creates key)
 click next, define key usage permissions (add the new user we created, vault) (<AWS_KMS_KEY_ID>)
 
-3. Install Vault (https://github.com/hashicorp/vault-helm) 
+## 3. Install Vault (https://github.com/hashicorp/vault-helm) 
+```
 $ kubectl create ns vault
 $ git clone https://github.com/hashicorp/vault-helm.git
 $ cd vault-helm
+```
 3.1 You need to edit the values.yaml file adding parameters
 NodeSelector for Vault (https://learn.hashicorp.com/tutorials/vault/kubernetes-reference-architecture?in=vault/kubernetes)
 
 HA with TLS (https://www.vaultproject.io/docs/platform/k8s/helm/examples/standalone-tls)
+```
 global:
 
   tlsDisable: false
@@ -91,18 +96,20 @@ server:
         secret_key = "<VAULT_USER_SECRET_KEY>"
         kms_key_id = "<AWS_KMS_KEY_ID>"
       }
+```
 Nodeselector (change the null value in the file values.yaml)
 …
-  # nodeSelector labels for server pod assignment, formatted as a muli-line string.
-  # ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
-  # Example:
-  # nodeSelector: |
-  #   beta.kubernetes.io/arch: amd64
+   nodeSelector labels for server pod assignment, formatted as a muli-line string.
+   ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
+  ```
+  Example:
+   nodeSelector: |
+     beta.kubernetes.io/arch: amd64
   nodeSelector:
 	<label: name>
-
+```
 Commands to generate SSL certificate and private key (there is a file in our project which can executed no need to run it manually)
-
+```
 $  sudo -i
 $  mkdir /root/ssl
 $  SERVICE=vault
@@ -156,14 +163,16 @@ $  kubectl create secret generic ${SECRET_NAME} \
          --from-file=vault.key=${TMPDIR}/vault.key \
          --from-file=vault.crt=${TMPDIR}/vault.crt \
          --from-file=vault.ca=${TMPDIR}/vault.ca
-
+```
 3.2 install Vault
-    $ helm install -n vault vault ./ 
+    `$ helm install -n vault vault ./ ` 
 3.3 You need to initialize the Vault.
+```
     $ kubectl get pods -n vault
     $ kubectl exec -it vault-0 -n vault -- sh
+```
 For auto-unseal, to work, you need to make an init once with the following command
-    $ vault operator init 
+   ` $ vault operator init` 
 you will see something like this
 Recovery Key 1: q+jzuRuljKTKGRD139BeSc+q878Pc4uyDoXkL+1n5nA0
 Recovery Key 2: g3zyC7liaGi4ENnyWxtcGGO1QdsgIkDHQqr5XkJOLAW6
@@ -176,42 +185,51 @@ Initial Root Token: s.EAwKiixSkB16CAxbYczc8bud
 Save keys and token somewhere in file!!!
 
 Login to create mount point for percona:
+```
 $ vault login s.EAwKiixSkB16CAxbYczc8bud
 $ vault secrets enable --version=1 -path=pxc-secret kv
 exit the container 
 $ exit
+```
 Backups for Vault (optional)
 Install in local machine etcdcli v3. Ubuntu 18.04:
+```
 $ apt install etcd-client
 $ kubectl port-forward --address localhost pod/etcd-0 32379:2379 
 $ etcdctl --debug --endpoints=http://127.0.0.1:32379 --user=root:YOUR_PASSWORD_FOR_ETCD snapshot save /tmp/snapshot-$(date +%Y%m%d).db
+```
 Install & setup Install Percona XtraDB Cluster
 
 
 
 1. Create a namespace pxc
+```
 $ kubectl create namespace pxc
 $ kubectl config set-context $(kubectl config current-context) --namespace=pxc
-
+```
 2. Use the following git clone command to download the correct branch of the percona-xtradb-cluster-operator repository:
-$ git clone -b v1.7.0 https://github.com/percona/percona-xtradb-cluster-operator
+`$ git clone -b v1.7.0 https://github.com/percona/percona-xtradb-cluster-operator`
 
 Edit /percona-xtradb-cluster-operator/deploy/cr.yaml
+```
 ...
 pmm:
        enabled: true
+```
 Nodeselector for percona need uncomment lines in file cr.yaml 
+```
 …
 #    nodeSelector:
 #      disktype: ssd
 ...
-
+```
 After the repository is downloaded, change the directory to run the rest of the commands in this document:
-$ cd percona-xtradb-cluster-operator
+`$ cd percona-xtradb-cluster-operator`
 
 3. Edit deploy/vault-secret.yaml (https://www.percona.com/doc/kubernetes-operator-for-pxc/encryption.html#encryption)
-$  cat /root/ssl/vault.ca (vault certificate)
+`$  cat /root/ssl/vault.ca (vault certificate)`
 
+```
 apiVersion: v1
 kind: Secret
 metadata:
@@ -227,15 +245,17 @@ stringData:
     -----BEGIN CERTIFICATE-----
     <REPLACE_WITH_OWN_CA_CERT>
     -----END CERTIFICATE-----
-
+```
 Check this yaml with this http://www.yamllint.com/
 
 Create secret keyring-secret-vault
-$ kubectl apply -f deploy/vault-secret.yaml -n pxc
+`$ kubectl apply -f deploy/vault-secret.yaml -n pxc`
 
 Deploy the operator with the following command:
-$ kubectl apply -f deploy/bundle.yaml -n pxc
+`$ kubectl apply -f deploy/bundle.yaml -n pxc`
+
 The following confirmation is returned:
+```
 customresourcedefinition.apiextensions.k8s.io/perconaxtradbclusters.pxc.percona.com created
 customresourcedefinition.apiextensions.k8s.io/perconaxtradbclusterbackups.pxc.percona.com created
 customresourcedefinition.apiextensions.k8s.io/perconaxtradbclusterrestores.pxc.percona.com created
@@ -244,7 +264,7 @@ role.rbac.authorization.k8s.io/percona-xtradb-cluster-operator created
 serviceaccount/percona-xtradb-cluster-operator created
 rolebinding.rbac.authorization.k8s.io/service-account-percona-xtradb-cluster-operator created
 deployment.apps/percona-xtradb-cluster-operator created
-
+```
 4. The operator has been started, and you can create the Percona XtraDB cluster:
 
 
@@ -252,43 +272,48 @@ deployment.apps/percona-xtradb-cluster-operator created
 
 Install pmm server for percona
 FYI: Installing the PMM Server (https://www.percona.com/blog/2020/07/23/using-percona-kubernetes-operators-with-percona-monitoring-and-management/)
-
+```
 $ helm repo add percona https://percona-charts.storage.googleapis.com
 $ helm repo update
-helm install monitoring percona/pmm-server -n pxc --set platform=kubernetes --version 2.7.0 --set "credentials.password=3kC3xRdk_1"
-
+$helm install monitoring percona/pmm-server -n pxc --set platform=kubernetes --version 2.7.0 --set "credentials.password=3kC3xRdk_1"
+```
 
 
 edit file deploy/secrets.yaml need change password , enter the password that you specified during installation in the field 
+```
 ...
 monitor: 3kC3xRdk_1
 ...
-
-$ kubectl apply -f deploy/cr.yaml -n pxc
+```
+`$ kubectl apply -f deploy/cr.yaml -n pxc`
 The process could take some time. The return statement confirms the creation:
 perconaxtradbcluster.pxc.percona.com/cluster1 created
 
 5. During previous steps, the Operator has generated several secrets, including the password for the root user, which you will need to access the cluster.
 Use kubectl get secrets command to see the list of Secrets objects (by default Secrets object you are interested in has my-cluster-secrets name). Then 
-$ kubectl get secret my-cluster-secrets -o yaml
+`$ kubectl get secret my-cluster-secrets -o yaml`
 will return the YAML file with generated secrets, including the root password which should look as follows:
+```
 ...
 data:
   ...
   root: cm9vdF9wYXNzd29yZA==
-
+```
 Here the actual password is base64-encoded, and echo 'cm9vdF9wYXNzd29yZA==' | base64 --decode will bring it back to a human-readable form (in this example it will be a root_password string).
 
 6. Now you can check whether you are able to connect to MySQL from the outside with the help of the kubectl port-forward command as follows:
+```
 $ kubectl port-forward svc/example-proxysql 3306:3306
 $ mysql -h 127.0.0.1 -P 3306 -uroot -proot_password
-
+```
 Run this on first setup
 SET GLOBAL pxc_strict_mode=PERMISSIVE;
 Backups for MySQL
 Making on-demand backup: 
+```
 $ kubectl apply -f deploy/backup-s3.yaml -n pxc (credential aws)
 $ kubectl apply -f backup/backup.yaml -n pxc (manual backup)
+```
 https://github.com/percona/percona-xtradb-cluster-operator/blob/main/deploy/backup/README.md
 
 
@@ -297,6 +322,7 @@ Prometheus monitoring for vault
 
 In the prometheus config you need to add
 # prometheus.yml
+```
 scrape_configs:
   - job_name: 'vault'
     metrics_path: "/v1/sys/metrics"
@@ -308,6 +334,7 @@ scrape_configs:
     bearer_token: "your_vault_token_here"
     static_configs:
     - targets: ['your_vault_server_here:8200']
+```
 https://www.vaultproject.io/docs/configuration/telemetry#prometheus
 
 Useful links
