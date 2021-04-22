@@ -175,6 +175,12 @@ $  kubectl create secret generic ${SECRET_NAME} \
 For auto-unseal, to work, you need to make an init once with the following command
 ` $ vault operator init` 
 
+===============================================
+Error initializing: Put "https://127.0.0.1:8200/v1/sys/init": x509: certificate signed by unknown authority
+``` $ export VAULT_ADDR=https://127.0.0.1:8200 ```
+``` $ export VAULT_CACERT="/vault/userconfig/vault-server-tls/vault.crt" ```
+================================================
+
 ```
 you will see something like this
 Recovery Key 1: q+jzuRuljKTKGRD139BeSc+q878Pc4uyDoXkL+1n5nA0
