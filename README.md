@@ -176,7 +176,7 @@ For auto-unseal, to work, you need to make an init once with the following comma
 ` $ vault operator init` 
 
 
-Error initializing: Put "https://127.0.0.1:8200/v1/sys/init": x509: certificate signed by unknown authority
+if we get: Error initializing: Put "https://127.0.0.1:8200/v1/sys/init": x509: certificate signed by unknown authority
 
 ``` $ export VAULT_ADDR=https://127.0.0.1:8200 ```
 
